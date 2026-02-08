@@ -8,7 +8,14 @@
       "program": "${workspaceFolder}/src/photo_selector/cli.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env",
-      "args": ["--input", "${env:INPUT_DIR}", "--output", "${env:OUTPUT_DIR}", "--target-count", "${env:TARGET_COUNT}"]
+      "args": [
+        "--input",
+        "${env:INPUT_DIR}",
+        "--output",
+        "${env:OUTPUT_DIR}",
+        "--target-count",
+        "${env:TARGET_COUNT}"
+      ]
     }
   ]
 }
