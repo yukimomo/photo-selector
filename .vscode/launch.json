@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run photo_selector (CLI)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/photo_selector/cli.py",
+      "console": "integratedTerminal",
+      "envFile": "${workspaceFolder}/.env",
+      "args": ["--input", "${env:INPUT_DIR}", "--output", "${env:OUTPUT_DIR}", "--target-count", "${env:TARGET_COUNT}"]
+    }
+  ]
+}
