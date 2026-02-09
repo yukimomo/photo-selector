@@ -1,5 +1,21 @@
 # Photo Selector
 
+## Photo selection
+
+Score and select photos using Ollama.
+
+```powershell
+python -m photo_selector.cli --input "C:\path\to\photos" --output "output" --target-count 120 --model gemma3:4b
+```
+
+### Options
+
+- `--input`: Input directory with photos.
+- `--output`: Output directory.
+- `--target-count`: Number of photos to select.
+- `--model`: Ollama model name (for example `gemma3:4b`).
+- `--ollama-base-url`: Ollama base URL (default `http://localhost:11434`).
+
 ## Video digest (per-source)
 
 Run the video digest pipeline. Each source video is split into clips, scored, and concatenated into a per-source digest.
