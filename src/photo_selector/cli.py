@@ -116,11 +116,14 @@ def main() -> int:
 def _build_prompt(quality: Dict[str, float | bool]) -> str:
 	return (
 		"You are evaluating a photo for a child's growth memory slideshow. "
-		"Return ONLY JSON. No extra text, no explanations, no markdown. "
+		"Return ONLY JSON. Do NOT output anything else. "
+		"No extra text, no explanations, no markdown. "
 		"The JSON MUST match this schema exactly, with no extra keys: "
 		f"{json.dumps(SCHEMA_TEMPLATE, ensure_ascii=True)} "
 		"Tags must be at most 5 items, all lowercase snake_case English words. "
-		"Use realistic scores from 0.0 to 1.0. "
+		"Caption must be short Japanese (15-25 characters). "
+		"Score must be between 0.0 and 1.0. "
+		"If the image is inappropriate or cannot be judged, still return JSON with a low score. "
 		"Background blur is acceptable. Focus on whether the subject looks sharp. "
 		"Set risks.blur true when the subject or hands show motion blur. "
 		"Set risks.out_of_focus true when the subject is not in focus. "
