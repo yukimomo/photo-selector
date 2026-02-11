@@ -18,6 +18,7 @@ from photo_selector.analyzer import (
 	encode_image_base64,
 	get_image_info,
 )
+from photo_selector.execution_plan import build_execution_plan
 from photo_selector.manifest import save_manifest
 from photo_selector.ollama_client import OllamaClient
 from photo_selector.resume_db import ScoreStore
@@ -46,6 +47,17 @@ def main() -> int:
 	selected_dir = output_dir / "selected"
 	manifest_path = output_dir / "manifest.photos.json"
 	db_path = output_dir / "photo_scores.sqlite"
+
+	if args.dry_run:
+		plan = build_execution_plan(
+			"photo",
+			input_path=input_dir,
+			output_dir=output_dir,
+			resume=args.resume,
+			force=args.force,
+		)
+		print(json.dumps(plan, ensure_ascii=True, indent=2))
+		return 0
 
 	output_dir.mkdir(parents=True, exist_ok=True)
 	selected_dir.mkdir(parents=True, exist_ok=True)
@@ -206,6 +218,11 @@ def _parse_args() -> argparse.Namespace:
 	parser.add_argument("--output", required=True, help="Output directory")
 	parser.add_argument("--target-count", required=True, type=int)
 	parser.add_argument("--model", default=env_model, required=env_model is None)
+	parser.add_argument(
+		"--dry-run",
+		action="store_true",
+		help="Print an execution plan without writing files",
+	)
 	parser.add_argument(
 		"--resume",
 		action="store_true",

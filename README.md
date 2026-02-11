@@ -42,6 +42,7 @@ photo-selector --input "C:\path\to\photos" --output "output" --target-count 120 
 - `--model`: Ollama model name (for example `gemma3:4b`).
 - `--resume`: Skip already processed files based on stored hashes.
 - `--force`: Recompute scores even if cached.
+- `--dry-run`: Print an execution plan without writing files.
 - `--ollama-base-url`: Ollama base URL (default `http://localhost:11434`).
 
 ## Video digest (per-source)
@@ -63,3 +64,4 @@ photo-video-digest --input "C:\path\to\videos" --output "output" --max-source-se
 - `--keep-temp`: Keep intermediate files under `output/temp`.
 - `--concat-in-digest-folder`: Also write `output/digest_clips/<source_stem>/digest.mp4`.
 - `--use-hwaccel`: Use NVENC for splitting and concatenation (NVIDIA GPUs).
+- `--dry-run`: Print an execution plan without writing files.

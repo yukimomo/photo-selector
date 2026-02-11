@@ -16,11 +16,15 @@ class CachedScore:
 
 
 class ScoreStore:
-	def __init__(self, db_path: Path) -> None:
+	def __init__(self, db_path: Path, create: bool = True) -> None:
 		self._db_path = db_path
-		self._init_db()
+		self._create = create
+		if create:
+			self._init_db()
 
 	def get(self, file_path: str, file_hash: str) -> CachedScore | None:
+		if not self._db_path.exists():
+			return None
 		row = self._fetch_row(file_path)
 		if row is None:
 			return None
@@ -41,6 +45,8 @@ class ScoreStore:
 		analysis: Dict[str, Any] | None,
 		quality: Dict[str, Any] | None,
 	) -> None:
+		if not self._db_path.exists() and not self._create:
+			raise RuntimeError("ScoreStore is read-only")
 		payload = (
 			file_path,
 			file_hash,
