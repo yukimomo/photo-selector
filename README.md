@@ -57,6 +57,13 @@ ruff check .
 pytest -q
 ```
 
+## CI checks
+
+Required checks for branch protection:
+
+- `lint`
+- `test`
+
 ## Config file
 
 Use `--config` to load settings from a YAML file. CLI flags override config values.
