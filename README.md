@@ -6,6 +6,28 @@
 pip install -e .
 ```
 
+## Developer setup
+
+Create and activate a virtual environment:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+Install in editable mode:
+
+```powershell
+pip install -e .
+```
+
+Run lint and tests:
+
+```powershell
+ruff check .
+pytest -q
+```
+
 ## Dependency management
 
 Install runtime dependencies:
