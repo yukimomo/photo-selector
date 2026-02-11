@@ -102,7 +102,7 @@ def compute_image_hash(path: Path, hash_size: int = HASH_SIZE) -> int:
 	with Image.open(path) as image:
 		grayscale = image.convert("L")
 		resized = grayscale.resize((hash_size, hash_size), Image.Resampling.BILINEAR)
-		pixels = list(cast(Iterable[int], resized.getdata()))
+		pixels = list(_get_flattened_pixels(resized))
 	avg = sum(pixels) / len(pixels)
 
 	hash_value = 0
@@ -111,6 +111,13 @@ def compute_image_hash(path: Path, hash_size: int = HASH_SIZE) -> int:
 			hash_value |= 1 << idx
 
 	return hash_value
+
+
+def _get_flattened_pixels(image: Image.Image) -> Iterable[int]:
+	get_flattened = getattr(image, "get_flattened_data", None)
+	if callable(get_flattened):
+		return cast(Iterable[int], get_flattened())
+	return cast(Iterable[int], image.getdata())
 
 
 def apply_quality_corrections(

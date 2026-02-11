@@ -1,0 +1,3 @@
+[console_scripts]
+photo-selector = photo_selector.cli:main
+photo-video-digest = photo_selector.video_cli:main
