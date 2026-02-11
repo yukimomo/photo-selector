@@ -40,6 +40,8 @@ photo-selector --input "C:\path\to\photos" --output "output" --target-count 120 
 - `--output`: Output directory.
 - `--target-count`: Number of photos to select.
 - `--model`: Ollama model name (for example `gemma3:4b`).
+- `--resume`: Skip already processed files based on stored hashes.
+- `--force`: Recompute scores even if cached.
 - `--ollama-base-url`: Ollama base URL (default `http://localhost:11434`).
 
 ## Video digest (per-source)

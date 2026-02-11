@@ -20,6 +20,7 @@ from photo_selector.analyzer import (
 )
 from photo_selector.manifest import save_manifest
 from photo_selector.ollama_client import OllamaClient
+from photo_selector.resume_db import ScoreStore
 from photo_selector.selector import select_top_photos
 
 
@@ -44,14 +45,18 @@ def main() -> int:
 	output_dir = Path(args.output).expanduser().resolve()
 	selected_dir = output_dir / "selected"
 	manifest_path = output_dir / "manifest.photos.json"
+	db_path = output_dir / "photo_scores.sqlite"
 
 	output_dir.mkdir(parents=True, exist_ok=True)
 	selected_dir.mkdir(parents=True, exist_ok=True)
+	score_store = ScoreStore(db_path)
 
 	image_paths = collect_image_paths(input_dir)
 	client = OllamaClient(base_url=args.ollama_base_url)
 
 	photos: list[Dict[str, Any]] = []
+	resume_enabled = bool(args.resume) and not bool(args.force)
+
 	for path in tqdm(image_paths, desc="Analyzing", unit="image"):
 		record: Dict[str, Any] = {
 			"path": str(path),
@@ -68,25 +73,42 @@ def main() -> int:
 				}
 			)
 
-			quality = analyze_quality(path)
-			image_b64 = encode_image_base64(path)
-			prompt = _build_prompt(quality)
-			analysis = client.chat(args.model, image_b64, prompt)
-			analysis = _validate_analysis(analysis)
-			analysis["score"] = apply_quality_corrections(
-				float(analysis["score"]),
-				quality,
-				info.width,
-				info.height,
-			)
-			analysis["score"] = _apply_risk_penalties(
-				float(analysis["score"]),
-				analysis.get("risks", {}),
-			)
+			cached = None
+			if resume_enabled:
+				cached = score_store.get(record["path"], record["hash"])
 
-			record["analysis"] = analysis
-			record["quality"] = quality
-			record["error"] = None
+			if cached is not None:
+				analysis = cached.analysis or {"score": cached.score}
+				record["analysis"] = _validate_analysis(analysis)
+				record["quality"] = cached.quality
+				record["error"] = None
+			else:
+				quality = analyze_quality(path)
+				image_b64 = encode_image_base64(path)
+				prompt = _build_prompt(quality)
+				analysis = client.chat(args.model, image_b64, prompt)
+				analysis = _validate_analysis(analysis)
+				analysis["score"] = apply_quality_corrections(
+					float(analysis["score"]),
+					quality,
+					info.width,
+					info.height,
+				)
+				analysis["score"] = _apply_risk_penalties(
+					float(analysis["score"]),
+					analysis.get("risks", {}),
+				)
+
+				record["analysis"] = analysis
+				record["quality"] = quality
+				record["error"] = None
+				score_store.upsert(
+					record["path"],
+					record["hash"],
+					float(analysis["score"]),
+					analysis,
+					quality,
+				)
 		except Exception as exc:  # noqa: BLE001
 			record["analysis"] = None
 			record["quality"] = None
@@ -184,6 +206,16 @@ def _parse_args() -> argparse.Namespace:
 	parser.add_argument("--output", required=True, help="Output directory")
 	parser.add_argument("--target-count", required=True, type=int)
 	parser.add_argument("--model", default=env_model, required=env_model is None)
+	parser.add_argument(
+		"--resume",
+		action="store_true",
+		help="Skip already processed files based on stored hashes",
+	)
+	parser.add_argument(
+		"--force",
+		action="store_true",
+		help="Recompute scores even if cached",
+	)
 	parser.add_argument(
 		"--ollama-base-url",
 		default=env_base_url or "http://localhost:11434",
