@@ -4,7 +4,7 @@ import argparse
 import json
 import os
 import shutil
-import sys
+import time
 from pathlib import Path
 from typing import Any, Dict
 
@@ -21,6 +21,7 @@ from photo_selector.analyzer import (
 )
 from photo_selector.dependency_check import DependencyError, validate_dependencies
 from photo_selector.execution_plan import build_execution_plan
+from photo_selector.log_utils import log_event
 from photo_selector.manifest import save_manifest
 from photo_selector.ollama_client import OllamaClient
 from photo_selector.output_paths import get_photo_paths
@@ -47,12 +48,22 @@ def main() -> int:
 	try:
 		return _run(args)
 	except DependencyError as exc:
-		_print_error(str(exc))
+		log_event(
+			args.log_format,
+			level="error",
+			event_type="dependency_error",
+			message=str(exc),
+		)
 		return 1
 	except Exception as exc:  # noqa: BLE001
 		if args.debug:
 			raise
-		_print_error(str(exc))
+		log_event(
+			args.log_format,
+			level="error",
+			event_type="error",
+			message=str(exc),
+		)
 		return 1
 
 
@@ -63,6 +74,7 @@ def _run(args: argparse.Namespace) -> int:
 		require_ollama=True,
 	)
 
+	start_time = time.monotonic()
 	input_dir = Path(args.input).expanduser().resolve()
 	output_dir = Path(args.output).expanduser().resolve()
 	paths = get_photo_paths(output_dir)
@@ -76,6 +88,7 @@ def _run(args: argparse.Namespace) -> int:
 			force=args.force,
 		)
 		print(json.dumps(plan, ensure_ascii=True, indent=2))
+		_summary_from_plan(args.log_format, plan, start_time)
 		return 0
 
 	output_dir.mkdir(parents=True, exist_ok=True)
@@ -89,6 +102,7 @@ def _run(args: argparse.Namespace) -> int:
 	photos: list[Dict[str, Any]] = []
 	resume_enabled = bool(args.resume) and not bool(args.force)
 
+	skipped = 0
 	for path in tqdm(image_paths, desc="Analyzing", unit="image"):
 		record: Dict[str, Any] = {
 			"path": str(path),
@@ -110,6 +124,7 @@ def _run(args: argparse.Namespace) -> int:
 				cached = score_store.get(record["path"], record["hash"])
 
 			if cached is not None:
+				skipped += 1
 				analysis = cached.analysis or {"score": cached.score}
 				record["analysis"] = _validate_analysis(analysis)
 				record["quality"] = cached.quality
@@ -164,11 +179,55 @@ def _run(args: argparse.Namespace) -> int:
 			record["selected"] = False
 
 	save_manifest(paths.manifest_path, {"photos": photos})
+	failed = sum(1 for photo in photos if photo.get("error"))
+	processed = len(photos) - skipped
+	_summary(
+		args.log_format,
+		total_files=len(image_paths),
+		processed=processed,
+		skipped=skipped,
+		failed=failed,
+		start_time=start_time,
+	)
 	return 0
 
 
-def _print_error(message: str) -> None:
-	sys.stderr.write(f"Error: {message}\n")
+def _summary_from_plan(log_format: str, plan: Dict[str, Any], start_time: float) -> None:
+	files_to_process = plan.get("files_to_process") or []
+	files_to_skip = plan.get("files_to_skip") or []
+	_summary(
+		log_format,
+		total_files=len(files_to_process) + len(files_to_skip),
+		processed=len(files_to_process),
+		skipped=len(files_to_skip),
+		failed=0,
+		start_time=start_time,
+	)
+
+
+def _summary(
+	log_format: str,
+	*,
+	total_files: int,
+	processed: int,
+	skipped: int,
+	failed: int,
+	start_time: float,
+) -> None:
+	duration = time.monotonic() - start_time
+	log_event(
+		log_format,
+		level="info",
+		event_type="summary",
+		message="summary",
+		extra={
+			"total_files": total_files,
+			"processed": processed,
+			"skipped": skipped,
+			"failed": failed,
+			"duration_seconds": round(duration, 3),
+		},
+	)
 
 
 def _build_prompt(quality: Dict[str, float | bool]) -> str:
@@ -251,6 +310,12 @@ def _parse_args() -> argparse.Namespace:
 		"--debug",
 		action="store_true",
 		help="Show stack traces on errors",
+	)
+	parser.add_argument(
+		"--log-format",
+		choices=["plain", "json"],
+		default="plain",
+		help="Log format",
 	)
 	parser.add_argument(
 		"--resume",

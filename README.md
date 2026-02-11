@@ -73,6 +73,7 @@ photo-selector --input "C:\path\to\photos" --output "output" --target-count 120 
 - `--force`: Recompute scores even if cached.
 - `--dry-run`: Print an execution plan without writing files.
 - `--debug`: Show stack traces on errors.
+- `--log-format`: `plain` or `json` (default `plain`).
 - `--ollama-base-url`: Ollama base URL (default `http://localhost:11434`).
 
 ## Video digest (per-source)
@@ -96,3 +97,15 @@ photo-video-digest --input "C:\path\to\videos" --output "output" --max-source-se
 - `--use-hwaccel`: Use NVENC for splitting and concatenation (NVIDIA GPUs).
 - `--dry-run`: Print an execution plan without writing files.
 - `--debug`: Show stack traces on errors.
+- `--log-format`: `plain` or `json` (default `plain`).
+
+## Logging
+
+Structured logging can be enabled with `--log-format json`. Each line is a JSON object.
+The final summary always includes:
+
+- `total_files`
+- `processed`
+- `skipped`
+- `failed`
+- `duration_seconds`

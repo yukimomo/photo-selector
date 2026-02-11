@@ -3,16 +3,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 from photo_selector.dependency_check import DependencyError, validate_dependencies
 from photo_selector.execution_plan import build_execution_plan
+from photo_selector.log_utils import log_event
 from photo_selector.manifest_video import save_manifest
 from photo_selector.output_paths import get_video_paths
 from photo_selector.video_digest import run_video_digest
+from photo_selector.video_splitter import collect_video_paths
 
 
 def main() -> int:
@@ -21,12 +23,22 @@ def main() -> int:
 	try:
 		return _run(args)
 	except DependencyError as exc:
-		_print_error(str(exc))
+		log_event(
+			args.log_format,
+			level="error",
+			event_type="dependency_error",
+			message=str(exc),
+		)
 		return 1
 	except Exception as exc:  # noqa: BLE001
 		if args.debug:
 			raise
-		_print_error(str(exc))
+		log_event(
+			args.log_format,
+			level="error",
+			event_type="error",
+			message=str(exc),
+		)
 		return 1
 
 
@@ -38,6 +50,7 @@ def _run(args: argparse.Namespace) -> int:
 		use_hwaccel=args.use_hwaccel,
 	)
 
+	start_time = time.monotonic()
 	input_path = Path(args.input).expanduser().resolve()
 	output_dir = Path(args.output).expanduser().resolve()
 
@@ -50,7 +63,10 @@ def _run(args: argparse.Namespace) -> int:
 			concat_in_digest_folder=args.concat_in_digest_folder,
 		)
 		print(json.dumps(plan, ensure_ascii=True, indent=2))
+		_summary_from_plan(args.log_format, plan, start_time)
 		return 0
+
+	video_paths = collect_video_paths(input_path)
 
 	result = run_video_digest(
 		input_path=input_path,
@@ -78,11 +94,54 @@ def _run(args: argparse.Namespace) -> int:
 	}
 
 	save_manifest(paths.manifest_path, manifest)
+	failed = sum(1 for source in result.sources if source.get("error"))
+	_summary(
+		args.log_format,
+		total_files=len(video_paths),
+		processed=len(video_paths),
+		skipped=0,
+		failed=failed,
+		start_time=start_time,
+	)
 	return 0
 
 
-def _print_error(message: str) -> None:
-	sys.stderr.write(f"Error: {message}\n")
+def _summary_from_plan(log_format: str, plan: Dict[str, Any], start_time: float) -> None:
+	files_to_process = plan.get("files_to_process") or []
+	files_to_skip = plan.get("files_to_skip") or []
+	_summary(
+		log_format,
+		total_files=len(files_to_process) + len(files_to_skip),
+		processed=len(files_to_process),
+		skipped=len(files_to_skip),
+		failed=0,
+		start_time=start_time,
+	)
+
+
+def _summary(
+	log_format: str,
+	*,
+	total_files: int,
+	processed: int,
+	skipped: int,
+	failed: int,
+	start_time: float,
+) -> None:
+	duration = time.monotonic() - start_time
+	log_event(
+		log_format,
+		level="info",
+		event_type="summary",
+		message="summary",
+		extra={
+			"total_files": total_files,
+			"processed": processed,
+			"skipped": skipped,
+			"failed": failed,
+			"duration_seconds": round(duration, 3),
+		},
+	)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -104,6 +163,12 @@ def _parse_args() -> argparse.Namespace:
 		"--debug",
 		action="store_true",
 		help="Show stack traces on errors",
+	)
+	parser.add_argument(
+		"--log-format",
+		choices=["plain", "json"],
+		default="plain",
+		help="Log format",
 	)
 	parser.add_argument(
 		"--ollama-base-url",
