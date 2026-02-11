@@ -150,8 +150,8 @@ def _summary(
 
 def _parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="Video digest MVP")
-	parser.add_argument("--input", required=True, help="Input video file or folder")
-	parser.add_argument("--output", required=True, help="Output directory")
+	parser.add_argument("--input", help="Input video file or folder")
+	parser.add_argument("--output", help="Output directory")
 	parser.add_argument("--max-source-seconds", required=True, type=int)
 	parser.add_argument("--min-clip", default=2, type=int)
 	parser.add_argument("--max-clip", default=6, type=int)
@@ -217,6 +217,15 @@ def _apply_config(args: argparse.Namespace) -> None:
 	args.model = model
 	args.ollama_base_url = base_url
 	args.preset = preset
+
+	input_path = args.input or config.get("input")
+	output_path = args.output or config.get("output")
+	if not isinstance(input_path, str) or not input_path:
+		raise ValueError("Missing input. Set --input or config input.")
+	if not isinstance(output_path, str) or not output_path:
+		raise ValueError("Missing output. Set --output or config output.")
+	args.input = input_path
+	args.output = output_path
 
 
 if __name__ == "__main__":

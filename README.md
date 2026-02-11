@@ -70,6 +70,8 @@ Use `--config` to load settings from a YAML file. CLI flags override config valu
 
 Supported keys:
 
+- `input`
+- `output`
 - `model`
 - `base_url`
 - `target_count` (photo only)
@@ -81,6 +83,8 @@ Example:
 ```yaml
 model: gemma3:4b
 base_url: http://localhost:11434
+input: C:\path\to\input
+output: C:\path\to\output
 target_count: 120
 preset: youtube16x9
 hwaccel: true

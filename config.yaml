@@ -1,0 +1,12 @@
+model: gemma3:4b
+base_url: http://localhost:11434
+target_count: 120
+
+video:
+  preset: youtube16x9
+  use_hwaccel: true
+  keep_temp: false
+  concat_in_digest_folder: true
+
+logging:
+  format: json
