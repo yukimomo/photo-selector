@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
-def load_config(path: Path) -> Dict[str, Any]:
+def load_config(path: Path) -> dict[str, Any]:
 	if not path.exists():
 		raise FileNotFoundError(f"Config file not found: {path}")
 
@@ -21,6 +21,19 @@ def load_config(path: Path) -> Dict[str, Any]:
 	if not isinstance(data, dict):
 		raise ValueError("Config must be a YAML mapping")
 	return data
+
+
+def get_section(config: dict[str, Any], key: str) -> dict[str, Any]:
+	value = config.get(key)
+	return value if isinstance(value, dict) else {}
+
+
+def get_value(config: dict[str, Any], key: str, section: str | None = None) -> Any:
+	if section:
+		section_value = get_section(config, section)
+		if key in section_value:
+			return section_value.get(key)
+	return config.get(key)
 
 
 def coerce_bool(value: Any) -> bool | None:

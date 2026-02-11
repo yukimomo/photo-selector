@@ -68,17 +68,31 @@ Required checks for branch protection:
 
 Use `--config` to load settings from a YAML file. CLI flags override config values.
 
-Supported keys:
+Supported keys (recommended nested `photo:` and `video:`):
 
 - `input`
 - `output`
 - `model`
 - `base_url`
 - `target_count` (photo only)
-- `preset` (video only)
-- `hwaccel`
+- `max_source_seconds` (video only)
+- `photo.dedupe_enabled`
+- `photo.dedupe_hamming_threshold`
+- `video.preset`
+- `video.max_source_seconds`
+- `video.use_hwaccel`
+- `video.hwaccel` (legacy)
+- `video.concat_in_digest_folder`
+- `video.delete_split_files`
+- `video.dedupe_enabled`
+- `video.dedupe_hamming_threshold`
+- `video.dedupe_scope`
+- `video.max_selected_clips`
+- `video.target_digest_seconds`
 
-Example:
+Top-level keys are still supported for backward compatibility.
+
+Example (recommended nested):
 
 ```yaml
 model: gemma3:4b
@@ -86,8 +100,33 @@ base_url: http://localhost:11434
 input: C:\path\to\input
 output: C:\path\to\output
 target_count: 120
-preset: youtube16x9
-hwaccel: true
+max_source_seconds: 30
+photo:
+  dedupe_enabled: true
+  dedupe_hamming_threshold: 6
+video:
+  max_source_seconds: 30
+  preset: youtube16x9
+  use_hwaccel: true
+  concat_in_digest_folder: true
+  delete_split_files: false
+  dedupe_enabled: true
+  dedupe_hamming_threshold: 6
+  dedupe_scope: per_source_video
+  max_selected_clips: 20
+  target_digest_seconds: 90
+
+Example (top-level legacy keys):
+
+```yaml
+model: gemma3:4b
+base_url: http://localhost:11434
+input: C:\path\to\input
+output: C:\path\to\output
+target_count: 120
+max_source_seconds: 30
+concat_in_digest_folder: true
+```
 ```
 
 ## Output structure
@@ -100,6 +139,7 @@ All outputs are organized under the `--output` directory:
 - `digest_clips/`: Selected clips per source
 
 Final concatenated digests are written to the output root.
+Concatenation operates on selected clips only, ordered by clip start time.
 
 ## Startup dependency checks
 
@@ -135,6 +175,8 @@ photo-selector --input "C:\path\to\photos" --output "output" --target-count 120 
 - `--model`: Ollama model name (for example `gemma3:4b`).
 - `--resume`: Skip already processed files based on stored hashes.
 - `--force`: Recompute scores even if cached.
+- `--photo-dedupe` / `--no-photo-dedupe`: Enable or disable near-duplicate filtering.
+- `--photo-dedupe-hamming-threshold`: Hamming distance threshold (default 6).
 - `--dry-run`: Print an execution plan without writing files.
 - `--debug`: Show stack traces on errors.
 - `--log-format`: `plain` or `json` (default `plain`).
@@ -157,8 +199,14 @@ photo-video-digest --input "C:\path\to\videos" --output "output" --max-source-se
 - `--ollama-base-url`: Ollama base URL (default `http://localhost:11434`).
 - `--preset`: `youtube16x9`, `shorts9x16`, or `clips_only`.
 - `--keep-temp`: Keep intermediate files under `output/temp`.
+- `--delete-split-files`: When `--keep-temp` is not set, delete split clips and temp artifacts after a successful run.
 - `--concat-in-digest-folder`: Also write `output/digest_clips/<source_stem>/digest.mp4`.
 - `--use-hwaccel`: Use NVENC for splitting and concatenation (NVIDIA GPUs).
+- `--video-dedupe` / `--no-video-dedupe`: Enable or disable near-duplicate filtering.
+- `--video-dedupe-hamming-threshold`: Hamming distance threshold (default 6).
+- `--video-dedupe-scope`: `global` or `per_source_video` (default `per_source_video`).
+- `--video-max-selected-clips`: Max selected clips per source (default 20).
+- `--video-target-digest-seconds`: Max digest seconds per source (default 90).
 - `--dry-run`: Print an execution plan without writing files.
 - `--debug`: Show stack traces on errors.
 - `--log-format`: `plain` or `json` (default `plain`).

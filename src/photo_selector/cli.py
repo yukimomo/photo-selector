@@ -26,9 +26,9 @@ from photo_selector.manifest import save_manifest
 from photo_selector.ollama_client import OllamaClient
 from photo_selector.output_paths import get_photo_paths
 from photo_selector.resume_db import ScoreStore
-from photo_selector.config_loader import coerce_bool, load_config
+from photo_selector.config_loader import coerce_bool, get_value, load_config
 from photo_selector.score_schema import normalize_analysis
-from photo_selector.selector import select_top_photos
+from photo_selector.selector import select_photos_with_dedupe
 
 
 SCHEMA_TEMPLATE = {
@@ -166,7 +166,36 @@ def _run(args: argparse.Namespace) -> int:
 
 		photos.append(record)
 
-	selected = select_top_photos(photos, args.target_count)
+	scored_photos = [
+		photo
+		for photo in photos
+		if not photo.get("error")
+		and isinstance(photo.get("analysis"), dict)
+		and isinstance(photo["analysis"].get("score"), (int, float))
+	]
+	selected_before_dedupe = min(args.target_count, len(scored_photos))
+	selected = select_photos_with_dedupe(
+		photos,
+		args.target_count,
+		args.photo_dedupe_hamming_threshold,
+		args.photo_dedupe,
+	)
+	removed_duplicates = (
+		selected_before_dedupe - len(selected) if args.photo_dedupe else 0
+	)
+	log_event(
+		args.log_format,
+		level="info",
+		event_type="photo_dedupe",
+		message="photo dedupe summary",
+		extra={
+			"total_photos": len(image_paths),
+			"scored": len(scored_photos),
+			"selected_before_dedupe": selected_before_dedupe,
+			"removed_as_duplicate": removed_duplicates,
+			"final_selected": len(selected),
+		},
+	)
 	selected_paths = {item["path"] for item in selected}
 
 	for record in photos:
@@ -281,6 +310,10 @@ def _parse_args() -> argparse.Namespace:
 	parser.add_argument("--target-count", type=int)
 	parser.add_argument("--model", default=os.getenv("OLLAMA_MODEL"))
 	parser.add_argument("--config", help="Path to config.yaml")
+	parser.add_argument("--photo-dedupe", dest="photo_dedupe", action="store_true")
+	parser.add_argument("--no-photo-dedupe", dest="photo_dedupe", action="store_false")
+	parser.set_defaults(photo_dedupe=None)
+	parser.add_argument("--photo-dedupe-hamming-threshold", type=int)
 	parser.add_argument(
 		"--dry-run",
 		action="store_true",
@@ -320,13 +353,13 @@ def _apply_config(args: argparse.Namespace) -> None:
 	if args.config:
 		config = load_config(Path(args.config).expanduser().resolve())
 
-	model = args.model or config.get("model") or os.getenv("OLLAMA_MODEL")
+	model = args.model or get_value(config, "model") or os.getenv("OLLAMA_MODEL")
 	if not isinstance(model, str) or not model:
 		raise ValueError("Missing model. Set --model, config model, or OLLAMA_MODEL.")
 
 	base_url = (
 		args.ollama_base_url
-		or config.get("base_url")
+		or get_value(config, "base_url")
 		or os.getenv("OLLAMA_BASE_URL")
 		or "http://localhost:11434"
 	)
@@ -335,7 +368,7 @@ def _apply_config(args: argparse.Namespace) -> None:
 
 	target_count = args.target_count
 	if target_count is None:
-		target_count = config.get("target_count")
+		target_count = get_value(config, "target_count")
 	if target_count is None:
 		raise ValueError("Missing target_count. Set --target-count or config target_count.")
 	try:
@@ -343,12 +376,30 @@ def _apply_config(args: argparse.Namespace) -> None:
 	except (TypeError, ValueError):
 		raise ValueError("target_count must be an integer")
 
+	dedupe_enabled = args.photo_dedupe
+	if dedupe_enabled is None:
+		dedupe_enabled = coerce_bool(get_value(config, "dedupe_enabled", "photo"))
+	if dedupe_enabled is None:
+		dedupe_enabled = True
+
+	dedupe_threshold = args.photo_dedupe_hamming_threshold
+	if dedupe_threshold is None:
+		dedupe_threshold = get_value(config, "dedupe_hamming_threshold", "photo")
+	if dedupe_threshold is None:
+		dedupe_threshold = 6
+	try:
+		dedupe_threshold = int(dedupe_threshold)
+	except (TypeError, ValueError):
+		raise ValueError("photo.dedupe_hamming_threshold must be an integer")
+
 	args.model = model
 	args.ollama_base_url = base_url
 	args.target_count = target_count
+	args.photo_dedupe = bool(dedupe_enabled)
+	args.photo_dedupe_hamming_threshold = dedupe_threshold
 
-	input_path = args.input or config.get("input")
-	output_path = args.output or config.get("output")
+	input_path = args.input or get_value(config, "input")
+	output_path = args.output or get_value(config, "output")
 	if not isinstance(input_path, str) or not input_path:
 		raise ValueError("Missing input. Set --input or config input.")
 	if not isinstance(output_path, str) or not output_path:
@@ -356,7 +407,7 @@ def _apply_config(args: argparse.Namespace) -> None:
 	args.input = input_path
 	args.output = output_path
 
-	hwaccel = coerce_bool(config.get("hwaccel"))
+	hwaccel = coerce_bool(get_value(config, "hwaccel"))
 	if hwaccel and not args.use_hwaccel:
 		args.use_hwaccel = True
 

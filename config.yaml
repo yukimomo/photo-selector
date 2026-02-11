@@ -1,12 +1,18 @@
 model: gemma3:4b
 base_url: http://localhost:11434
 target_count: 120
+input: C:\path\to\input
+output: C:\path\to\output
+photo:
+  dedupe_enabled: true
 
 video:
   preset: youtube16x9
   use_hwaccel: true
   keep_temp: false
+  delete_split_files: true
   concat_in_digest_folder: true
-
+  dedupe_enabledd: true
+max_source_seconds: 300
 logging:
   format: json
