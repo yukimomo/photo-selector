@@ -86,7 +86,6 @@ def _analyze_with_rms(
 	sample_width: int,
 ) -> AudioAnalysis:
 	window_frames = max(int(sample_rate * RMS_WINDOW_MS / 1000), 1)
-	bytes_per_frame = sample_width * channels
 	chunk_size = window_frames
 	max_possible = float((1 << (8 * sample_width - 1)) - 1)
 

@@ -275,13 +275,11 @@ def _apply_risk_penalties(score: float, risks: Dict[str, Any]) -> float:
 
 
 def _parse_args() -> argparse.Namespace:
-	env_model = os.getenv("OLLAMA_MODEL")
-	env_base_url = os.getenv("OLLAMA_BASE_URL")
 	parser = argparse.ArgumentParser(description="Photo selector MVP")
 	parser.add_argument("--input", required=True, help="Input directory")
 	parser.add_argument("--output", required=True, help="Output directory")
 	parser.add_argument("--target-count", type=int)
-	parser.add_argument("--model")
+	parser.add_argument("--model", default=os.getenv("OLLAMA_MODEL"))
 	parser.add_argument("--config", help="Path to config.yaml")
 	parser.add_argument(
 		"--dry-run",
@@ -311,7 +309,7 @@ def _parse_args() -> argparse.Namespace:
 	)
 	parser.add_argument(
 		"--ollama-base-url",
-		default=None,
+		default=os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434",
 		help="Ollama base URL",
 	)
 	return parser.parse_args()

@@ -5,6 +5,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Any, Dict
 
 from dotenv import load_dotenv
 
@@ -148,15 +149,13 @@ def _summary(
 
 
 def _parse_args() -> argparse.Namespace:
-	env_model = os.getenv("OLLAMA_MODEL")
-	env_base_url = os.getenv("OLLAMA_BASE_URL")
 	parser = argparse.ArgumentParser(description="Video digest MVP")
 	parser.add_argument("--input", required=True, help="Input video file or folder")
 	parser.add_argument("--output", required=True, help="Output directory")
 	parser.add_argument("--max-source-seconds", required=True, type=int)
 	parser.add_argument("--min-clip", default=2, type=int)
 	parser.add_argument("--max-clip", default=6, type=int)
-	parser.add_argument("--model")
+	parser.add_argument("--model", default=os.getenv("OLLAMA_MODEL"))
 	parser.add_argument("--config", help="Path to config.yaml")
 	parser.add_argument(
 		"--dry-run",
@@ -176,7 +175,7 @@ def _parse_args() -> argparse.Namespace:
 	)
 	parser.add_argument(
 		"--ollama-base-url",
-		default=None,
+		default=os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434",
 		help="Ollama base URL",
 	)
 	parser.add_argument("--keep-temp", action="store_true")
