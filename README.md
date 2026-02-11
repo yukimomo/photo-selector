@@ -26,6 +26,28 @@ Regenerate the lock file (requires pip-tools):
 pip-compile --output-file=requirements.lock requirements.txt
 ```
 
+## Config file
+
+Use `--config` to load settings from a YAML file. CLI flags override config values.
+
+Supported keys:
+
+- `model`
+- `base_url`
+- `target_count` (photo only)
+- `preset` (video only)
+- `hwaccel`
+
+Example:
+
+```yaml
+model: gemma3:4b
+base_url: http://localhost:11434
+target_count: 120
+preset: youtube16x9
+hwaccel: true
+```
+
 ## Output structure
 
 All outputs are organized under the `--output` directory:

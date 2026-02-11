@@ -26,6 +26,7 @@ from photo_selector.manifest import save_manifest
 from photo_selector.ollama_client import OllamaClient
 from photo_selector.output_paths import get_photo_paths
 from photo_selector.resume_db import ScoreStore
+from photo_selector.config_loader import coerce_bool, load_config
 from photo_selector.score_schema import normalize_analysis
 from photo_selector.selector import select_top_photos
 
@@ -69,6 +70,7 @@ def main() -> int:
 
 
 def _run(args: argparse.Namespace) -> int:
+	_apply_config(args)
 	validate_dependencies(
 		base_url=args.ollama_base_url,
 		require_ffmpeg=True,
@@ -278,8 +280,9 @@ def _parse_args() -> argparse.Namespace:
 	parser = argparse.ArgumentParser(description="Photo selector MVP")
 	parser.add_argument("--input", required=True, help="Input directory")
 	parser.add_argument("--output", required=True, help="Output directory")
-	parser.add_argument("--target-count", required=True, type=int)
-	parser.add_argument("--model", default=env_model, required=env_model is None)
+	parser.add_argument("--target-count", type=int)
+	parser.add_argument("--model")
+	parser.add_argument("--config", help="Path to config.yaml")
 	parser.add_argument(
 		"--dry-run",
 		action="store_true",
@@ -308,10 +311,47 @@ def _parse_args() -> argparse.Namespace:
 	)
 	parser.add_argument(
 		"--ollama-base-url",
-		default=env_base_url or "http://localhost:11434",
+		default=None,
 		help="Ollama base URL",
 	)
 	return parser.parse_args()
+
+
+def _apply_config(args: argparse.Namespace) -> None:
+	config: dict[str, object] = {}
+	if args.config:
+		config = load_config(Path(args.config).expanduser().resolve())
+
+	model = args.model or config.get("model") or os.getenv("OLLAMA_MODEL")
+	if not isinstance(model, str) or not model:
+		raise ValueError("Missing model. Set --model, config model, or OLLAMA_MODEL.")
+
+	base_url = (
+		args.ollama_base_url
+		or config.get("base_url")
+		or os.getenv("OLLAMA_BASE_URL")
+		or "http://localhost:11434"
+	)
+	if not isinstance(base_url, str) or not base_url:
+		raise ValueError("Invalid base_url in config or args")
+
+	target_count = args.target_count
+	if target_count is None:
+		target_count = config.get("target_count")
+	if target_count is None:
+		raise ValueError("Missing target_count. Set --target-count or config target_count.")
+	try:
+		target_count = int(target_count)
+	except (TypeError, ValueError):
+		raise ValueError("target_count must be an integer")
+
+	args.model = model
+	args.ollama_base_url = base_url
+	args.target_count = target_count
+
+	hwaccel = coerce_bool(config.get("hwaccel"))
+	if hwaccel and not args.use_hwaccel:
+		args.use_hwaccel = True
 
 
 if __name__ == "__main__":

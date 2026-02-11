@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from photo_selector.dependency_check import DependencyError, validate_dependencies
 from photo_selector.execution_plan import build_execution_plan
+from photo_selector.config_loader import coerce_bool, load_config
 from photo_selector.log_utils import log_event
 from photo_selector.manifest_video import save_manifest
 from photo_selector.output_paths import get_video_paths
@@ -43,6 +44,7 @@ def main() -> int:
 
 
 def _run(args: argparse.Namespace) -> int:
+	_apply_config(args)
 	validate_dependencies(
 		base_url=args.ollama_base_url,
 		require_ffmpeg=True,
@@ -154,7 +156,8 @@ def _parse_args() -> argparse.Namespace:
 	parser.add_argument("--max-source-seconds", required=True, type=int)
 	parser.add_argument("--min-clip", default=2, type=int)
 	parser.add_argument("--max-clip", default=6, type=int)
-	parser.add_argument("--model", default=env_model, required=env_model is None)
+	parser.add_argument("--model")
+	parser.add_argument("--config", help="Path to config.yaml")
 	parser.add_argument(
 		"--dry-run",
 		action="store_true",
@@ -173,7 +176,7 @@ def _parse_args() -> argparse.Namespace:
 	)
 	parser.add_argument(
 		"--ollama-base-url",
-		default=env_base_url or "http://localhost:11434",
+		default=None,
 		help="Ollama base URL",
 	)
 	parser.add_argument("--keep-temp", action="store_true")
@@ -181,10 +184,40 @@ def _parse_args() -> argparse.Namespace:
 	parser.add_argument("--use-hwaccel", action="store_true")
 	parser.add_argument(
 		"--preset",
-		default="youtube16x9",
 		choices=["youtube16x9", "shorts9x16", "clips_only"],
 	)
 	return parser.parse_args()
+
+
+def _apply_config(args: argparse.Namespace) -> None:
+	config: dict[str, object] = {}
+	if args.config:
+		config = load_config(Path(args.config).expanduser().resolve())
+
+	model = args.model or config.get("model") or os.getenv("OLLAMA_MODEL")
+	if not isinstance(model, str) or not model:
+		raise ValueError("Missing model. Set --model, config model, or OLLAMA_MODEL.")
+
+	base_url = (
+		args.ollama_base_url
+		or config.get("base_url")
+		or os.getenv("OLLAMA_BASE_URL")
+		or "http://localhost:11434"
+	)
+	if not isinstance(base_url, str) or not base_url:
+		raise ValueError("Invalid base_url in config or args")
+
+	preset = args.preset or config.get("preset") or "youtube16x9"
+	if preset not in {"youtube16x9", "shorts9x16", "clips_only"}:
+		raise ValueError("Invalid preset in config or args")
+
+	hwaccel = coerce_bool(config.get("hwaccel"))
+	if hwaccel and not args.use_hwaccel:
+		args.use_hwaccel = True
+
+	args.model = model
+	args.ollama_base_url = base_url
+	args.preset = preset
 
 
 if __name__ == "__main__":
