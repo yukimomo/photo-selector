@@ -26,6 +26,15 @@ Regenerate the lock file (requires pip-tools):
 pip-compile --output-file=requirements.lock requirements.txt
 ```
 
+## Quality checks
+
+Run lint and tests locally:
+
+```powershell
+ruff check .
+pytest -q
+```
+
 ## Config file
 
 Use `--config` to load settings from a YAML file. CLI flags override config values.
