@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 from typing import Any, Dict
 
@@ -18,6 +19,7 @@ from photo_selector.analyzer import (
 	encode_image_base64,
 	get_image_info,
 )
+from photo_selector.dependency_check import DependencyError, validate_dependencies
 from photo_selector.execution_plan import build_execution_plan
 from photo_selector.manifest import save_manifest
 from photo_selector.ollama_client import OllamaClient
@@ -41,6 +43,24 @@ SCHEMA_TEMPLATE = {
 def main() -> int:
 	load_dotenv()
 	args = _parse_args()
+	try:
+		return _run(args)
+	except DependencyError as exc:
+		_print_error(str(exc))
+		return 1
+	except Exception as exc:  # noqa: BLE001
+		if args.debug:
+			raise
+		_print_error(str(exc))
+		return 1
+
+
+def _run(args: argparse.Namespace) -> int:
+	validate_dependencies(
+		base_url=args.ollama_base_url,
+		require_ffmpeg=True,
+		require_ollama=True,
+	)
 
 	input_dir = Path(args.input).expanduser().resolve()
 	output_dir = Path(args.output).expanduser().resolve()
@@ -147,6 +167,10 @@ def main() -> int:
 	return 0
 
 
+def _print_error(message: str) -> None:
+	sys.stderr.write(f"Error: {message}\n")
+
+
 def _build_prompt(quality: Dict[str, float | bool]) -> str:
 	return (
 		"You are evaluating a photo for a child's growth memory slideshow. "
@@ -222,6 +246,11 @@ def _parse_args() -> argparse.Namespace:
 		"--dry-run",
 		action="store_true",
 		help="Print an execution plan without writing files",
+	)
+	parser.add_argument(
+		"--debug",
+		action="store_true",
+		help="Show stack traces on errors",
 	)
 	parser.add_argument(
 		"--resume",

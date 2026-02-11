@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+from photo_selector.dependency_check import DependencyError, validate_dependencies
 from photo_selector.execution_plan import build_execution_plan
 from photo_selector.manifest_video import save_manifest
 from photo_selector.video_digest import run_video_digest
@@ -15,6 +17,25 @@ from photo_selector.video_digest import run_video_digest
 def main() -> int:
 	load_dotenv()
 	args = _parse_args()
+	try:
+		return _run(args)
+	except DependencyError as exc:
+		_print_error(str(exc))
+		return 1
+	except Exception as exc:  # noqa: BLE001
+		if args.debug:
+			raise
+		_print_error(str(exc))
+		return 1
+
+
+def _run(args: argparse.Namespace) -> int:
+	validate_dependencies(
+		base_url=args.ollama_base_url,
+		require_ffmpeg=True,
+		require_ollama=True,
+		use_hwaccel=args.use_hwaccel,
+	)
 
 	input_path = Path(args.input).expanduser().resolve()
 	output_dir = Path(args.output).expanduser().resolve()
@@ -58,6 +79,10 @@ def main() -> int:
 	return 0
 
 
+def _print_error(message: str) -> None:
+	sys.stderr.write(f"Error: {message}\n")
+
+
 def _parse_args() -> argparse.Namespace:
 	env_model = os.getenv("OLLAMA_MODEL")
 	env_base_url = os.getenv("OLLAMA_BASE_URL")
@@ -72,6 +97,11 @@ def _parse_args() -> argparse.Namespace:
 		"--dry-run",
 		action="store_true",
 		help="Print an execution plan without writing files",
+	)
+	parser.add_argument(
+		"--debug",
+		action="store_true",
+		help="Show stack traces on errors",
 	)
 	parser.add_argument(
 		"--ollama-base-url",

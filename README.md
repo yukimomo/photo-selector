@@ -26,6 +26,24 @@ Regenerate the lock file (requires pip-tools):
 pip-compile --output-file=requirements.lock requirements.txt
 ```
 
+## Startup dependency checks
+
+At startup, the CLI validates:
+
+- `ffmpeg` is available in PATH
+- NVENC encoder availability when `--use-hwaccel` is set
+- Ollama server connectivity at `--ollama-base-url` (or `OLLAMA_BASE_URL`)
+
+If a dependency is missing, the command exits with a clear error message and non-zero code.
+Use `--debug` to show stack traces.
+
+Example checks:
+
+```powershell
+photo-selector --input "C:\path\to\photos" --output "output" --target-count 10 --model gemma3:4b --dry-run
+photo-video-digest --input "C:\path\to\videos" --output "output" --max-source-seconds 30 --preset youtube16x9 --use-hwaccel --dry-run
+```
+
 ## Photo selection
 
 Score and select photos using Ollama.
@@ -43,6 +61,7 @@ photo-selector --input "C:\path\to\photos" --output "output" --target-count 120 
 - `--resume`: Skip already processed files based on stored hashes.
 - `--force`: Recompute scores even if cached.
 - `--dry-run`: Print an execution plan without writing files.
+- `--debug`: Show stack traces on errors.
 - `--ollama-base-url`: Ollama base URL (default `http://localhost:11434`).
 
 ## Video digest (per-source)
@@ -65,3 +84,4 @@ photo-video-digest --input "C:\path\to\videos" --output "output" --max-source-se
 - `--concat-in-digest-folder`: Also write `output/digest_clips/<source_stem>/digest.mp4`.
 - `--use-hwaccel`: Use NVENC for splitting and concatenation (NVIDIA GPUs).
 - `--dry-run`: Print an execution plan without writing files.
+- `--debug`: Show stack traces on errors.
