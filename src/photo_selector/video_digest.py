@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -25,6 +25,7 @@ from photo_selector.output_paths import (
 	get_video_paths,
 	VideoOutputPaths,
 )
+from photo_selector.log_utils import log_event
 from photo_selector.score_schema import normalize_analysis
 from photo_selector.video_splitter import ClipInfo, collect_video_paths, split_video
 
@@ -46,6 +47,25 @@ MIN_BRIGHTNESS_GATE = 15.0
 @dataclass
 class DigestResult:
 	sources: List[Dict[str, Any]]
+	job_state: Dict[str, Dict[str, Any]]
+
+
+@dataclass
+class JobContext:
+	state: Dict[str, Dict[str, Any]] = field(
+		default_factory=lambda: {
+			"split": {},
+			"score": {},
+			"select": {},
+			"concat": {},
+		}
+	)
+
+	def record(self, step: str, key: str, status: str, error: str | None = None) -> None:
+		entry: Dict[str, Any] = {"status": status}
+		if error:
+			entry["error"] = error
+		self.state.setdefault(step, {})[key] = entry
 
 
 def run_video_digest(
@@ -70,17 +90,30 @@ def run_video_digest(
 
 	video_paths = collect_video_paths(input_path)
 	clips: list[ClipInfo] = []
+	job = JobContext()
 	for video_path in video_paths:
 		video_clip_dir = clip_dir / video_path.stem
-		clips.extend(
-			split_video(
-				video_path,
-				video_clip_dir,
-				min_clip,
-				max_clip,
-				use_hwaccel=use_hwaccel,
+		try:
+			clips.extend(
+				split_video(
+					video_path,
+					video_clip_dir,
+					min_clip,
+					max_clip,
+					use_hwaccel=use_hwaccel,
+				)
 			)
-		)
+			job.record("split", str(video_path), "ok")
+		except Exception as exc:  # noqa: BLE001
+			message = str(exc)
+			log_event(
+				"plain",
+				level="error",
+				event_type="split_failed",
+				file_path=str(video_path),
+				message=message,
+			)
+			job.record("split", str(video_path), "failed", message)
 
 	client = OllamaClient(base_url=base_url)
 	clip_records: list[Dict[str, Any]] = []
@@ -136,7 +169,9 @@ def run_video_digest(
 					"error": None,
 				}
 			)
+			job.record("score", str(clip.clip_path), "ok")
 		except Exception as exc:  # noqa: BLE001
+			message = str(exc)
 			record.update(
 				{
 					"analysis": None,
@@ -144,9 +179,17 @@ def run_video_digest(
 					"has_speech": None,
 					"audio_rms": None,
 					"score_final": None,
-					"error": str(exc),
+					"error": message,
 				}
 			)
+			log_event(
+				"plain",
+				level="error",
+				event_type="score_failed",
+				file_path=str(clip.clip_path),
+				message=message,
+			)
+			job.record("score", str(clip.clip_path), "failed", message)
 
 		clip_records.append(record)
 
@@ -157,12 +200,13 @@ def run_video_digest(
 		preset=preset,
 		concat_in_digest_folder=concat_in_digest_folder,
 		use_hwaccel=use_hwaccel,
+		job=job,
 	)
 
 	if not keep_temp:
 		shutil.rmtree(temp_dir, ignore_errors=True)
 
-	return DigestResult(sources=source_results)
+	return DigestResult(sources=source_results, job_state=job.state)
 
 
 def _build_prompt(quality: Dict[str, float | bool]) -> str:
@@ -213,6 +257,7 @@ def _process_sources(
 	preset: str,
 	concat_in_digest_folder: bool,
 	use_hwaccel: bool,
+	job: JobContext,
 ) -> List[Dict[str, Any]]:
 	grouped: dict[str, list[Dict[str, Any]]] = {}
 	for record in records:
@@ -231,6 +276,7 @@ def _process_sources(
 			preset=preset,
 			concat_in_digest_folder=concat_in_digest_folder,
 			use_hwaccel=use_hwaccel,
+			job=job,
 		)
 		results.append(result)
 
@@ -245,6 +291,7 @@ def _process_single_source(
 	preset: str,
 	concat_in_digest_folder: bool,
 	use_hwaccel: bool,
+	job: JobContext,
 ) -> Dict[str, Any]:
 	source = Path(source_path)
 	selected: list[Dict[str, Any]] = []
@@ -254,14 +301,28 @@ def _process_single_source(
 
 	try:
 		selected = _select_clips_for_source(records, max_source_seconds)
-		selected_sorted = sorted(selected, key=lambda item: float(item.get("start", 0.0)))
-		selected_clips_dir = digest_clips_source_dir(paths, source.stem)
-		selected_clips_dir.mkdir(parents=True, exist_ok=True)
+		job.record("select", source_path, "ok")
+	except Exception as exc:  # noqa: BLE001
+		return_error = str(exc)
+		job.record("select", source_path, "failed", return_error)
+		log_event(
+			"plain",
+			level="error",
+			event_type="select_failed",
+			file_path=source_path,
+			message=return_error,
+		)
+		selected = []
 
-		copied_paths: list[Path] = []
-		for idx, record in enumerate(selected_sorted, start=1):
-			clip_path = Path(record["clip_path"])
-			destination = selected_clips_dir / f"clip_{idx:04d}{clip_path.suffix}"
+	selected_sorted = sorted(selected, key=lambda item: float(item.get("start", 0.0)))
+	selected_clips_dir = digest_clips_source_dir(paths, source.stem)
+	selected_clips_dir.mkdir(parents=True, exist_ok=True)
+
+	copied_paths: list[Path] = []
+	for idx, record in enumerate(selected_sorted, start=1):
+		clip_path = Path(record["clip_path"])
+		destination = selected_clips_dir / f"clip_{idx:04d}{clip_path.suffix}"
+		try:
 			shutil.copy2(clip_path, destination)
 			copied_paths.append(destination)
 			selected_manifest.append(
@@ -273,26 +334,61 @@ def _process_single_source(
 					"has_speech": record.get("has_speech"),
 				}
 			)
+			job.record("select", str(clip_path), "ok")
+		except Exception as exc:  # noqa: BLE001
+			message = str(exc)
+			job.record("select", str(clip_path), "failed", message)
+			log_event(
+				"plain",
+				level="error",
+				event_type="copy_failed",
+				file_path=str(clip_path),
+				message=message,
+			)
 
-		if preset != "clips_only" and copied_paths:
-			digest_path = final_digest_path(paths, source.stem)
+	if preset != "clips_only" and copied_paths:
+		digest_path = final_digest_path(paths, source.stem)
+		try:
 			_concat_clips_reencode(
 				copied_paths,
 				digest_path,
 				use_hwaccel,
 				concat_list_path(paths, f"{source.stem}_root"),
 			)
+			job.record("concat", str(digest_path), "ok")
+		except Exception as exc:  # noqa: BLE001
+			message = str(exc)
+			return_error = return_error or message
+			job.record("concat", str(digest_path), "failed", message)
+			log_event(
+				"plain",
+				level="error",
+				event_type="concat_failed",
+				file_path=str(digest_path),
+				message=message,
+			)
 
-		if concat_in_digest_folder and copied_paths:
-			folder_concat = selected_clips_dir / "digest.mp4"
+	if concat_in_digest_folder and copied_paths:
+		folder_concat = selected_clips_dir / "digest.mp4"
+		try:
 			_concat_clips_reencode(
 				copied_paths,
 				folder_concat,
 				use_hwaccel,
 				concat_list_path(paths, f"{source.stem}_folder"),
 			)
-	except Exception as exc:  # noqa: BLE001
-		return_error = str(exc)
+			job.record("concat", str(folder_concat), "ok")
+		except Exception as exc:  # noqa: BLE001
+			message = str(exc)
+			return_error = return_error or message
+			job.record("concat", str(folder_concat), "failed", message)
+			log_event(
+				"plain",
+				level="error",
+				event_type="concat_failed",
+				file_path=str(folder_concat),
+				message=message,
+			)
 
 
 	return {

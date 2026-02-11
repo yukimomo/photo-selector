@@ -99,6 +99,8 @@ photo-video-digest --input "C:\path\to\videos" --output "output" --max-source-se
 - `--debug`: Show stack traces on errors.
 - `--log-format`: `plain` or `json` (default `plain`).
 
+The video manifest also includes `job_state`, which records per-step status for split, score, select, and concat.
+
 ## Logging
 
 Structured logging can be enabled with `--log-format json`. Each line is a JSON object.

@@ -91,6 +91,7 @@ def _run(args: argparse.Namespace) -> int:
 		"model": args.model,
 		"preset": args.preset,
 		"sources": result.sources,
+		"job_state": result.job_state,
 	}
 
 	save_manifest(paths.manifest_path, manifest)
