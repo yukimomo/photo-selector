@@ -26,6 +26,7 @@ from photo_selector.manifest import save_manifest
 from photo_selector.ollama_client import OllamaClient
 from photo_selector.output_paths import get_photo_paths
 from photo_selector.resume_db import ScoreStore
+from photo_selector.score_schema import normalize_analysis
 from photo_selector.selector import select_top_photos
 
 
@@ -250,29 +251,7 @@ def _build_prompt(quality: Dict[str, float | bool]) -> str:
 
 
 def _validate_analysis(analysis: Dict[str, Any]) -> Dict[str, Any]:
-	if not isinstance(analysis, dict):
-		raise ValueError("Analysis is not a JSON object")
-
-	analysis.setdefault("caption", "")
-	analysis.setdefault("tags", [])
-	analysis.setdefault("risks", {})
-
-	if "score" not in analysis:
-		raise ValueError("Missing key in analysis: score")
-
-	if not isinstance(analysis.get("tags"), list):
-		analysis["tags"] = []
-	if not isinstance(analysis.get("risks"), dict):
-		analysis["risks"] = {}
-
-	if not isinstance(analysis.get("score"), (int, float)):
-		raise ValueError("Score must be a number")
-
-	risks = analysis.get("risks", {})
-	for risk_key in ("blur", "dark", "overexposed", "out_of_focus"):
-		risks.setdefault(risk_key, False)
-
-	return analysis
+	return normalize_analysis(analysis)
 
 
 def _apply_risk_penalties(score: float, risks: Dict[str, Any]) -> float:

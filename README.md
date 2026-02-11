@@ -109,3 +109,16 @@ The final summary always includes:
 - `skipped`
 - `failed`
 - `duration_seconds`
+
+## Scoring schema
+
+LLM output is normalized into a strict schema:
+
+- `overall_score`: 0.0 to 1.0
+- `sharpness`: 0.0 to 1.0
+- `subject_visibility`: 0.0 to 1.0
+- `composition`: 0.0 to 1.0
+- `duplication_penalty`: 0.0 to 1.0
+- `reasoning`: short text
+
+Missing fields are safely defaulted, and legacy `score` is mapped to `overall_score`.
