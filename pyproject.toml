@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "photo-selector"
+version = "0.1.0"
+description = "Score and select photos and create video digests."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "requests>=2.31.0",
+  "pillow>=10.0.0",
+  "python-dotenv>=1.0.0",
+  "tqdm>=4.66.0",
+  "pillow-heif>=0.18.0",
+]
+
+[project.scripts]
+photo-selector = "photo_selector.cli:main"
+photo-video-digest = "photo_selector.video_cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

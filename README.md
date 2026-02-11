@@ -1,11 +1,17 @@
 # Photo Selector
 
+## Install (editable)
+
+```powershell
+pip install -e .
+```
+
 ## Photo selection
 
 Score and select photos using Ollama.
 
 ```powershell
-python -m photo_selector.cli --input "C:\path\to\photos" --output "output" --target-count 120 --model gemma3:4b
+photo-selector --input "C:\path\to\photos" --output "output" --target-count 120 --model gemma3:4b
 ```
 
 ### Options
@@ -21,7 +27,7 @@ python -m photo_selector.cli --input "C:\path\to\photos" --output "output" --tar
 Run the video digest pipeline. Each source video is split into clips, scored, and concatenated into a per-source digest.
 
 ```powershell
-python -m photo_selector.video_cli --input "C:\path\to\videos" --output "output" --max-source-seconds 30 --min-clip 2 --max-clip 6 --preset clips_only --model gemma3:4b --concat-in-digest-folder
+photo-video-digest --input "C:\path\to\videos" --output "output" --max-source-seconds 30 --min-clip 2 --max-clip 6 --preset clips_only --model gemma3:4b --concat-in-digest-folder
 ```
 
 ### Options
