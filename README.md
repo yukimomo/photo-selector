@@ -6,6 +6,26 @@
 pip install -e .
 ```
 
+## Dependency management
+
+Install runtime dependencies:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Install dev tools:
+
+```powershell
+pip install -r requirements-dev.txt
+```
+
+Regenerate the lock file (requires pip-tools):
+
+```powershell
+pip-compile --output-file=requirements.lock requirements.txt
+```
+
 ## Photo selection
 
 Score and select photos using Ollama.
