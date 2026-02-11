@@ -26,6 +26,17 @@ Regenerate the lock file (requires pip-tools):
 pip-compile --output-file=requirements.lock requirements.txt
 ```
 
+## Output structure
+
+All outputs are organized under the `--output` directory:
+
+- `selected/`: Selected images
+- `scores/`: Score database and manifests
+- `temp/`: Intermediate artifacts (clips, frames, audio, concat lists)
+- `digest_clips/`: Selected clips per source
+
+Final concatenated digests are written to the output root.
+
 ## Startup dependency checks
 
 At startup, the CLI validates:

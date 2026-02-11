@@ -4,6 +4,13 @@ from pathlib import Path
 from typing import Any, Dict, Iterable
 
 from photo_selector.analyzer import collect_image_paths, compute_image_hash
+from photo_selector.output_paths import (
+	concat_list_path,
+	digest_clips_source_dir,
+	final_digest_path,
+	get_photo_paths,
+	get_video_paths,
+)
 from photo_selector.resume_db import ScoreStore
 from photo_selector.video_splitter import collect_video_paths
 
@@ -43,8 +50,8 @@ def _build_photo_plan(
 	force: bool,
 ) -> Dict[str, Any]:
 	resume_enabled = bool(resume) and not bool(force)
-	db_path = output_dir / "photo_scores.sqlite"
-	score_store = ScoreStore(db_path, create=False) if resume_enabled else None
+	paths = get_photo_paths(output_dir)
+	score_store = ScoreStore(paths.db_path, create=False) if resume_enabled else None
 
 	image_paths = collect_image_paths(input_path)
 	files_to_process: list[str] = []
@@ -60,13 +67,14 @@ def _build_photo_plan(
 				continue
 		files_to_process.append(str(path))
 
-	selected_dir = output_dir / "selected"
 	estimated_outputs: list[str] = [
-		str(output_dir / "manifest.photos.json"),
-		str(selected_dir),
+		str(paths.scores_dir),
+		str(paths.manifest_path),
+		str(paths.db_path),
+		str(paths.selected_dir),
 	]
 	estimated_outputs.extend(
-		str(selected_dir / Path(path).name) for path in files_to_process
+		str(paths.selected_dir / Path(path).name) for path in files_to_process
 	)
 
 	return {
@@ -85,29 +93,36 @@ def _build_video_plan(
 	preset: str | None,
 	concat_in_digest_folder: bool,
 ) -> Dict[str, Any]:
+	paths = get_video_paths(output_dir)
 	video_paths = collect_video_paths(input_path)
 	files_to_process = [str(path) for path in video_paths]
 	files_to_skip: list[str] = []
 
 	estimated_outputs: list[str] = [
-		str(output_dir / "manifest.videos.json"),
-		str(output_dir / "digest_clips"),
-		str(output_dir / "per_source"),
-		str(output_dir / "temp"),
+		str(paths.scores_dir),
+		str(paths.manifest_path),
+		str(paths.digest_clips_dir),
+		str(paths.temp_dir),
 	]
 
 	for path in video_paths:
 		stem = path.stem
 		estimated_outputs.append(
-			str(output_dir / "digest_clips" / stem / "clip_*.mp4")
+			str(digest_clips_source_dir(paths, stem) / "clip_*.mp4")
 		)
 		if preset != "clips_only":
 			estimated_outputs.append(
-				str(output_dir / "per_source" / f"{stem}_digest.mp4")
+				str(final_digest_path(paths, stem))
+			)
+			estimated_outputs.append(
+				str(concat_list_path(paths, f"{stem}_root"))
 			)
 		if concat_in_digest_folder:
 			estimated_outputs.append(
-				str(output_dir / "digest_clips" / stem / "digest.mp4")
+				str(digest_clips_source_dir(paths, stem) / "digest.mp4")
+			)
+			estimated_outputs.append(
+				str(concat_list_path(paths, f"{stem}_folder"))
 			)
 
 	return {

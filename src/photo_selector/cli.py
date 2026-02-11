@@ -23,6 +23,7 @@ from photo_selector.dependency_check import DependencyError, validate_dependenci
 from photo_selector.execution_plan import build_execution_plan
 from photo_selector.manifest import save_manifest
 from photo_selector.ollama_client import OllamaClient
+from photo_selector.output_paths import get_photo_paths
 from photo_selector.resume_db import ScoreStore
 from photo_selector.selector import select_top_photos
 
@@ -64,9 +65,7 @@ def _run(args: argparse.Namespace) -> int:
 
 	input_dir = Path(args.input).expanduser().resolve()
 	output_dir = Path(args.output).expanduser().resolve()
-	selected_dir = output_dir / "selected"
-	manifest_path = output_dir / "manifest.photos.json"
-	db_path = output_dir / "photo_scores.sqlite"
+	paths = get_photo_paths(output_dir)
 
 	if args.dry_run:
 		plan = build_execution_plan(
@@ -80,8 +79,9 @@ def _run(args: argparse.Namespace) -> int:
 		return 0
 
 	output_dir.mkdir(parents=True, exist_ok=True)
-	selected_dir.mkdir(parents=True, exist_ok=True)
-	score_store = ScoreStore(db_path)
+	paths.selected_dir.mkdir(parents=True, exist_ok=True)
+	paths.scores_dir.mkdir(parents=True, exist_ok=True)
+	score_store = ScoreStore(paths.db_path)
 
 	image_paths = collect_image_paths(input_dir)
 	client = OllamaClient(base_url=args.ollama_base_url)
@@ -157,13 +157,13 @@ def _run(args: argparse.Namespace) -> int:
 	for record in selected:
 		try:
 			source = Path(record["path"])
-			destination = selected_dir / source.name
+			destination = paths.selected_dir / source.name
 			shutil.copy2(source, destination)
 		except Exception as exc:  # noqa: BLE001
 			record["error"] = record.get("error") or str(exc)
 			record["selected"] = False
 
-	save_manifest(manifest_path, {"photos": photos})
+	save_manifest(paths.manifest_path, {"photos": photos})
 	return 0
 
 

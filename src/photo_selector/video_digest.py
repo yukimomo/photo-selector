@@ -18,6 +18,13 @@ from photo_selector.analyzer import (
 from photo_selector.audio_analyzer import AudioAnalysis, analyze_audio
 from photo_selector.frame_extractor import extract_representative_frame
 from photo_selector.ollama_client import OllamaClient
+from photo_selector.output_paths import (
+	concat_list_path,
+	digest_clips_source_dir,
+	final_digest_path,
+	get_video_paths,
+	VideoOutputPaths,
+)
 from photo_selector.video_splitter import ClipInfo, collect_video_paths, split_video
 
 
@@ -54,7 +61,8 @@ def run_video_digest(
 	use_hwaccel: bool,
 ) -> DigestResult:
 	output_dir.mkdir(parents=True, exist_ok=True)
-	temp_dir = output_dir / "temp"
+	paths = get_video_paths(output_dir)
+	temp_dir = paths.temp_dir
 	clip_dir = temp_dir / "clips"
 	frame_dir = temp_dir / "frames"
 	audio_dir = temp_dir / "audio"
@@ -143,7 +151,7 @@ def run_video_digest(
 
 	source_results = _process_sources(
 		clip_records,
-		output_dir=output_dir,
+			paths=paths,
 		max_source_seconds=max_source_seconds,
 		preset=preset,
 		concat_in_digest_folder=concat_in_digest_folder,
@@ -221,7 +229,7 @@ def _apply_risk_penalties(score: float, risks: Dict[str, Any]) -> float:
 
 def _process_sources(
 	records: List[Dict[str, Any]],
-	output_dir: Path,
+	paths: VideoOutputPaths,
 	max_source_seconds: int,
 	preset: str,
 	concat_in_digest_folder: bool,
@@ -239,7 +247,7 @@ def _process_sources(
 		result = _process_single_source(
 			source_path,
 			source_records,
-			output_dir=output_dir,
+			paths=paths,
 			max_source_seconds=max_source_seconds,
 			preset=preset,
 			concat_in_digest_folder=concat_in_digest_folder,
@@ -253,7 +261,7 @@ def _process_sources(
 def _process_single_source(
 	source_path: str,
 	records: List[Dict[str, Any]],
-	output_dir: Path,
+	paths: VideoOutputPaths,
 	max_source_seconds: int,
 	preset: str,
 	concat_in_digest_folder: bool,
@@ -268,7 +276,7 @@ def _process_single_source(
 	try:
 		selected = _select_clips_for_source(records, max_source_seconds)
 		selected_sorted = sorted(selected, key=lambda item: float(item.get("start", 0.0)))
-		selected_clips_dir = output_dir / "digest_clips" / source.stem
+		selected_clips_dir = digest_clips_source_dir(paths, source.stem)
 		selected_clips_dir.mkdir(parents=True, exist_ok=True)
 
 		copied_paths: list[Path] = []
@@ -288,14 +296,22 @@ def _process_single_source(
 			)
 
 		if preset != "clips_only" and copied_paths:
-			digest_dir = output_dir / "per_source"
-			digest_dir.mkdir(parents=True, exist_ok=True)
-			digest_path = digest_dir / f"{source.stem}_digest.mp4"
-			_concat_clips_reencode(copied_paths, digest_path, use_hwaccel)
+			digest_path = final_digest_path(paths, source.stem)
+			_concat_clips_reencode(
+				copied_paths,
+				digest_path,
+				use_hwaccel,
+				concat_list_path(paths, f"{source.stem}_root"),
+			)
 
 		if concat_in_digest_folder and copied_paths:
 			folder_concat = selected_clips_dir / "digest.mp4"
-			_concat_clips_reencode(copied_paths, folder_concat, use_hwaccel)
+			_concat_clips_reencode(
+				copied_paths,
+				folder_concat,
+				use_hwaccel,
+				concat_list_path(paths, f"{source.stem}_folder"),
+			)
 	except Exception as exc:  # noqa: BLE001
 		return_error = str(exc)
 
@@ -347,8 +363,9 @@ def _concat_clips_reencode(
 	clips: List[Path],
 	output_path: Path,
 	use_hwaccel: bool,
+	list_path: Path,
 ) -> None:
-	list_path = output_path.parent / "digest_concat.txt"
+	list_path.parent.mkdir(parents=True, exist_ok=True)
 	lines = [f"file '{clip.as_posix()}'" for clip in clips]
 	list_path.write_text("\n".join(lines), encoding="utf-8")
 

@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from photo_selector.dependency_check import DependencyError, validate_dependencies
 from photo_selector.execution_plan import build_execution_plan
 from photo_selector.manifest_video import save_manifest
+from photo_selector.output_paths import get_video_paths
 from photo_selector.video_digest import run_video_digest
 
 
@@ -65,6 +66,7 @@ def _run(args: argparse.Namespace) -> int:
 		use_hwaccel=args.use_hwaccel,
 	)
 
+	paths = get_video_paths(output_dir)
 	manifest = {
 		"input": str(input_path),
 		"max_source_seconds": args.max_source_seconds,
@@ -75,7 +77,7 @@ def _run(args: argparse.Namespace) -> int:
 		"sources": result.sources,
 	}
 
-	save_manifest(output_dir / "manifest.videos.json", manifest)
+	save_manifest(paths.manifest_path, manifest)
 	return 0
 
 
